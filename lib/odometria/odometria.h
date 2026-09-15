@@ -16,17 +16,27 @@
 
 /* ==================== cartao de calibracao ==================== */
 
-/* Geometria, conferir com regua antes de acreditar. */
-#define ODO_ABERTURAS_DISCO    20
+/* Geometria, medida no carrinho. O alvo do encoder nao e disco vazado: sao
+ * 3 fitas isolantes pretas na roda esquerda e 4 na direita, lidas por
+ * refletancia pelo HW-201. Numeros diferentes nos dois lados nao quebram nada,
+ * porque o criterio de parada usa a MEDIA das duas contagens e nas duas
+ * manobras as rodas percorrem a mesma distancia. Exige ODO_KP em 0. */
+#define ODO_ABERTURAS_DISCO     4
 #define ODO_BORDAS_POR_ABERT    2
 #define ODO_PULSOS_POR_VOLTA   (ODO_ABERTURAS_DISCO * ODO_BORDAS_POR_ABERT)
 #define ODO_DIAM_RODA_MM       65
-#define ODO_ENTRE_RODAS_MM     140
+#define ODO_ENTRE_RODAS_MM     170
 
-/* Os dois numeros medidos. Trocar estes dois E a calibracao. Os valores abaixo
- * sao a estimativa geometrica de partida (pi*65/40 = 5,105 mm por pulso). */
-#define ODO_PULSOS_POR_M      196
-#define ODO_PULSOS_90          22
+/* MEDIDOS na atividade 4, laboratorio, piso do lab, alimentacao por power bank.
+ * POR_M: 38 pulsos comandados deram 1212 mm, entao 31 pulsos por metro, ou
+ * 32,3 mm por pulso. Confirmado no MODO 4, que repetiu 1000 mm e voltou para a
+ * marca de partida.
+ * PULSOS_90: com 3 o giro saiu em 65 graus, com 4 ficou perto de 90. Com 14
+ * bordas por volta o angulo comandado so anda de ~22 em ~22 graus, entao 4 e o
+ * degrau mais proximo de 90 que este encoder permite pedir.
+ * Trocar de piso ou de alimentacao invalida os dois. */
+#define ODO_PULSOS_POR_M       31
+#define ODO_PULSOS_90           4
 
 /* Escorregada depois do freio. Comeca em 0 porque o firmware mede a propria
  * escorregada e imprime; chute aqui esconde o efeito. */
