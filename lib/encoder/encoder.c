@@ -14,8 +14,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/irq.h>
 
-#define ENC_ESQ_PIN     6u
-#define ENC_DIR_PIN     7u
+#define ENC_ESQ_PIN     7u
+#define ENC_DIR_PIN     6u
 #define PORTD_IRQ      31u
 
 #define IRQC_DUAS_BORDAS  0xBu   /* 0x9 subida, 0xA descida, 0xB as duas */
