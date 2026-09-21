@@ -255,15 +255,12 @@ static int livre(void)
 	/* A leitura vai para o terminal a cada passo. Sem isso, sonar mudo e caminho
 	 * livre sao indistinguiveis de fora: os dois fazem o carrinho seguir reto. */
 	if (mm == HCSR04_TIMEOUT) {
-		printk("sonar: sem eco -> tratado como livre
-");
+		printk("sonar: sem eco -> tratado como livre\n");
 	} else {
-		printk("sonar: %d mm -> %s
-", (int)mm, ok ? "livre" : "BLOQUEADO");
+		printk("sonar: %d mm -> %s\n", (int)mm,
+		       ok ? "livre" : "BLOQUEADO");
 	}
 
-	/* sem eco quer dizer que nada refletiu dentro do alcance, ou seja caminho
-	 * livre. E o certo na maioria dos casos, e erra com parede em diagonal */
 	return ok;
 }
 
