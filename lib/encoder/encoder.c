@@ -22,7 +22,7 @@
 
 /* 300 us fica 7x abaixo do menor intervalo legitimo entre bordas na rotacao
  * maxima. O KL25Z nao tem filtro digital de pino, entao o filtro e aqui. */
-#define ENC_LOCKOUT_US   300u
+#define ENC_LOCKOUT_US  3000u
 
 static const uint8_t pino[2] = { ENC_ESQ_PIN, ENC_DIR_PIN };
 
