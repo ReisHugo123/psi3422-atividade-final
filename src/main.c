@@ -27,12 +27,12 @@
 #define LADO   LADO_CARRINHO
 
 /* ---- labirinto ---- */
-#define DIST_PARE_MM     180   /* parede a menos que isso e bloqueio. Tem de ser MAIOR que PASSO_MM
-                                * com folga, porque o sonar so e lido entre um passo
-                                * e outro e no passo o carrinho anda cego: o pior caso
-                                * termina a DIST_PARE menos PASSO da parede. */
-#define PASSO_MM         80   /* avanco entre duas leituras do sonar */
+#define DIST_PARE_MM     180   /* parede a menos que isso e bloqueio */
+#define AVANCO_MAX_MM   2000   /* trecho longo de proposito: quem corta o avanco e o
+                                * sonar, nao o alvo. Se andar isso inteiro sem ver
+                                * parede, simplesmente comeca outro trecho. */
 #define RECUO_MM          60   /* recua antes de girar, para nao raspar */
+#define SONAR_ESPERA_MS  120   /* depois de girar, espera a leitura refletir o rumo novo */
 #define VEL_RETO         ODO_VEL_RETO
 #define VEL_GIRO         ODO_VEL_GIRO
 
@@ -250,13 +250,50 @@ static void thread_radio(void *a, void *b, void *c)
 	}
 }
 
+/* Ultima leitura do sonar. Comeca em TIMEOUT, e nao em 0, porque 0 leria como
+ * parede colada e faria o carrinho manobrar sozinho no primeiro RUN. */
+static volatile int32_t sonar_mm = HCSR04_TIMEOUT;
+
+/* 1 enquanto ha um avanco em curso que o sonar tem direito de cortar. Fica em 0
+ * durante os giros, senao a parede de frente abortaria o proprio giro que esta
+ * tentando fugir dela. */
+static volatile int vigia_sonar;
+
+static int bloqueado(int32_t mm)
+{
+	/* sem eco quer dizer que nada refletiu dentro do alcance, ou seja caminho
+	 * livre. E o certo na maioria dos casos, e erra com parede em diagonal */
+	return (mm != HCSR04_TIMEOUT) && (mm <= DIST_PARE_MM);
+}
+
+/* Unica thread que fala com o sensor. Duas threads lendo o HC-SR04 roubariam a
+ * medida uma da outra, porque o driver entrega cada eco a quem estiver esperando.
+ *
+ * E ela que para o carrinho: o avanco e comandado longo e esta thread o corta com
+ * odo_aborta() quando a parede chega. O trigger sai a cada 70 ms, entao a reacao
+ * fica abaixo de 100 ms, contra os 80 mm de trecho cego do passo fixo. */
+static void thread_sonar(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+
+	while (1) {
+		int32_t mm = hcsr04_read_mm();
+
+		sonar_mm = mm;
+
+		if (vigia_sonar && bloqueado(mm)) {
+			vigia_sonar = 0;
+			printk("sonar: %d mm -> PAREDE, cortando o avanco\n", (int)mm);
+			odo_aborta();
+		}
+	}
+}
+
 static int livre(void)
 {
-	int32_t mm = hcsr04_read_mm();
-	int      ok = (mm == HCSR04_TIMEOUT) || (mm > DIST_PARE_MM);
+	int32_t mm = sonar_mm;
+	int      ok = !bloqueado(mm);
 
-	/* A leitura vai para o terminal a cada passo. Sem isso, sonar mudo e caminho
-	 * livre sao indistinguiveis de fora: os dois fazem o carrinho seguir reto. */
 	if (mm == HCSR04_TIMEOUT) {
 		printk("sonar: sem eco -> tratado como livre\n");
 	} else {
@@ -283,20 +320,38 @@ static int falhou(const odo_relato_t *r, const char *o_que)
 	return 1;
 }
 
-/* Um passo do labirinto. Livre, anda. Bloqueado, recua e procura saida: tenta a
- * direita, depois a esquerda, e se as duas fecharem volta por onde veio. */
+/* Um trecho do labirinto. Avanca CONTINUO, e quem corta o avanco e a thread do
+ * sonar quando a parede chega. Cortado, recua e procura saida: tenta a direita,
+ * depois a esquerda, e se as duas fecharem volta por onde veio.
+ *
+ * O avanco em trecho longo e o que tira o "anda cego" do passo fixo: antes o
+ * carrinho lia o sonar, andava 80 mm sem ver nada, e lia de novo. */
 static void passo_labirinto(void)
 {
 	odo_relato_t r;
 
-	if (livre()) {
-		led_cor(VERDE);
-		odo_anda_mm(PASSO_MM, VEL_RETO, &r);
-		soma_odometro(&r);
-		falhou(&r, "avanco");
+	led_cor(VERDE);
+	odo_limpa_aborto();
+	vigia_sonar = 1;
+	odo_anda_mm(AVANCO_MAX_MM, VEL_RETO, &r);
+	vigia_sonar = 0;
+	soma_odometro(&r);
+
+	/* STOP tambem aborta, e nele o estado ja mudou antes do odo_aborta(). E isso
+	 * que separa "o usuario pediu para parar" de "o sonar viu parede". */
+	if (estado != ENL_ANDANDO) {
+		return;
+	}
+	if (r.res == ODO_OK) {
+		return;                 /* andou o trecho inteiro sem ver parede */
+	}
+	if (r.res != ODO_ABORTADO) {
+		falhou(&r, "avanco");   /* travou ou deu timeout, isso e falha */
 		return;
 	}
 
+	/* daqui para baixo: o sonar cortou o avanco, tem parede na frente */
+	odo_limpa_aborto();
 	led_cor(AMARELO);
 	odo_anda_mm(-RECUO_MM, VEL_RETO, &r);
 	soma_odometro(&r);
@@ -305,11 +360,13 @@ static void passo_labirinto(void)
 	}
 
 	odo_gira_graus(90, VEL_GIRO, &r);
+	k_msleep(SONAR_ESPERA_MS);
 	if (falhou(&r, "vira a direita") || livre()) {
 		return;
 	}
 
 	odo_gira_graus(-180, VEL_GIRO, &r);
+	k_msleep(SONAR_ESPERA_MS);
 	if (falhou(&r, "vira a esquerda") || livre()) {
 		return;
 	}
@@ -339,6 +396,10 @@ static void thread_nav(void *a, void *b, void *c)
 K_THREAD_DEFINE(radio_tid, STACK_SZ, thread_radio, NULL, NULL, NULL, 5, 0, 0);
 K_THREAD_DEFINE(nav_tid,   STACK_SZ, thread_nav,   NULL, NULL, NULL, 6, 0, 0);
 
+/* Prioridade 4, acima do radio e da navegacao: ela passa a vida dormindo no
+ * semaforo do eco, e quando acorda precisa cortar o avanco na hora. */
+K_THREAD_DEFINE(sonar_tid, STACK_SZ, thread_sonar, NULL, NULL, NULL, 4, 0, 0);
+
 int main(void)
 {
 	leds_init();
@@ -356,7 +417,7 @@ int main(void)
 	printk("calibracao: %d pulsos/m | %d pulsos por 90 graus\n",
 	       ODO_PULSOS_POR_M, ODO_PULSOS_90);
 	printk("labirinto: para a menos de %d mm, passo de %d mm\n",
-	       DIST_PARE_MM, PASSO_MM);
+	       DIST_PARE_MM, AVANCO_MAX_MM);
 	ajuda();
 	printk("estado inicial: PARADO\n");
 
