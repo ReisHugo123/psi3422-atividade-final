@@ -24,7 +24,7 @@
 #define LADO_CONTROLE   1
 #define LADO_CARRINHO   2
 
-#define LADO   LADO_CONTROLE
+#define LADO   LADO_CARRINHO
 
 /* ---- labirinto ---- */
 #define DIST_PARE_MM     150   /* parede a menos que isso e bloqueio */
@@ -250,10 +250,21 @@ static void thread_radio(void *a, void *b, void *c)
 static int livre(void)
 {
 	int32_t mm = hcsr04_read_mm();
+	int      ok = (mm == HCSR04_TIMEOUT) || (mm > DIST_PARE_MM);
+
+	/* A leitura vai para o terminal a cada passo. Sem isso, sonar mudo e caminho
+	 * livre sao indistinguiveis de fora: os dois fazem o carrinho seguir reto. */
+	if (mm == HCSR04_TIMEOUT) {
+		printk("sonar: sem eco -> tratado como livre
+");
+	} else {
+		printk("sonar: %d mm -> %s
+", (int)mm, ok ? "livre" : "BLOQUEADO");
+	}
 
 	/* sem eco quer dizer que nada refletiu dentro do alcance, ou seja caminho
 	 * livre. E o certo na maioria dos casos, e erra com parede em diagonal */
-	return (mm == HCSR04_TIMEOUT) || (mm > DIST_PARE_MM);
+	return ok;
 }
 
 /* 1 quando a manobra nao terminou bem e a navegacao tem de parar. */
