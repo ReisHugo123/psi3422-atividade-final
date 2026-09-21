@@ -27,9 +27,9 @@
 #define LADO   LADO_CARRINHO
 
 /* ---- labirinto ---- */
-#define DIST_PARE_MM     250   /* parede a menos que isso e bloqueio */
-#define PASSO_MM         200   /* avanco entre duas leituras do sonar */
-#define RECUO_MM          80   /* recua antes de girar, para nao raspar */
+#define DIST_PARE_MM     150   /* parede a menos que isso e bloqueio */
+#define PASSO_MM         120   /* avanco entre duas leituras do sonar */
+#define RECUO_MM          60   /* recua antes de girar, para nao raspar */
 #define VEL_RETO         ODO_VEL_RETO
 #define VEL_GIRO         ODO_VEL_GIRO
 
