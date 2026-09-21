@@ -24,7 +24,7 @@
 #define LADO_CONTROLE   1
 #define LADO_CARRINHO   2
 
-#define LADO   LADO_CARRINHO
+#define LADO   LADO_CONTROLE
 
 /* ---- labirinto ---- */
 #define DIST_PARE_MM     150   /* parede a menos que isso e bloqueio */
