@@ -55,6 +55,9 @@
 #define NRF24_STATUS_MAX_RT     0x10u
 #define NRF24_STATUS_IRQS       0x70u  /* os tres, para limpar de uma vez */
 
+#define NRF24_FIFO_RX_EMPTY     0x01u
+#define NRF24_FIFO_RX_FULL      0x02u
+
 #define NRF24_ADDR_LEN          5u
 
 void nrf24_init(void);

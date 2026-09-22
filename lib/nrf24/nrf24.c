@@ -230,11 +230,30 @@ int nrf24_envia(const uint8_t *buf, uint8_t n)
 
 int nrf24_recebe(uint8_t *buf, uint8_t n)
 {
-	if (!(nrf24_status() & NRF24_STATUS_RX_DR)) {
+	/* A pergunta certa e "tem dado na FIFO", e nao "chegou pacote novo".
+	 *
+	 * O RX_DR acende uma vez por chegada, mas a FIFO guarda tres pacotes. Dois
+	 * que caiam entre duas leituras acendem uma bandeira so: lendo um payload e
+	 * apagando o RX_DR, o segundo ficava preso. Tres presos enchem a FIFO, e com
+	 * a FIFO cheia o radio para de dar auto-ACK - o outro lado passa a ver
+	 * SEM ACK. Os duplicados vem do proprio ARC 15: cada ACK perdido faz o
+	 * transmissor reenviar o mesmo pacote, que e guardado de novo.
+	 *
+	 * E travava de vez, porque o unico FLUSH_RX mora no nrf24_modo_rx(), que no
+	 * carrinho so roda quando ele responde - e responder exige ter recebido.
+	 * Surdo, nunca respondia; nao respondendo, nunca limpava. So o reset saia
+	 * dali, e era exatamente o sintoma na bancada em 22/09: parado um tempo,
+	 * comecava a dar SEM ACK ate resetar o carrinho.
+	 *
+	 * Perguntando ao FIFO_STATUS, cada chamada tira um pacote e o chamador
+	 * esvazia a fila sozinho, sem depender de bandeira nenhuma. */
+	if (nrf24_read_reg(NRF24_REG_FIFO_STATUS) & NRF24_FIFO_RX_EMPTY) {
+		nrf24_write_reg(NRF24_REG_STATUS, NRF24_STATUS_RX_DR);
 		return 0;
 	}
 
 	le(NRF24_CMD_R_RX_PAYLOAD, buf, n);
 	nrf24_write_reg(NRF24_REG_STATUS, NRF24_STATUS_RX_DR);
+
 	return 1;
 }
