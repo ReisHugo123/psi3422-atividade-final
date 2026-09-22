@@ -411,7 +411,7 @@ int main(void)
 
 	printk("\n=== PSI3422 - carrinho (entrega final) ===\n");
 	printk("motores : ENA=PTD2 IN1=PTD0 IN2=PTD5 | ENB=PTD3 IN3=PTE0 IN4=PTE1\n");
-	printk("encoders: ENC_ESQ=PTD6 (J2-17)  ENC_DIR=PTD7 (J2-19)\n");
+	printk("encoders: ENC_ESQ=PTD7 (J2-19)  ENC_DIR=PTD6 (J2-17)\n");
 	printk("sonar   : TRIG=PTB0 (A0)  ECHO=PTB1 (A1)\n");
 	printk("radio   : SCK=PTC5 MOSI=PTC6 MISO=PTC7 CSN=PTA4 CE=PTD4\n");
 	printk("calibracao: %d pulsos/m | %d pulsos por 90 graus\n",
