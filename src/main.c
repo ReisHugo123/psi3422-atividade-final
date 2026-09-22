@@ -15,6 +15,8 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/uart.h>
 
+#include <MKL25Z4.h>
+
 #include <enlace.h>
 #include <encoder.h>
 #include <hcsr04.h>
@@ -66,12 +68,41 @@ static void led_cor(enum cor c)
 	gpio_pin_set_dt(&led_azul,   c == AZUL);
 }
 
-/* Le uma tecla sem bloquear. -1 quando nao ha nada. */
-static int tecla(void)
+/* Le uma tecla direto do hardware. -1 quando nao ha nada.
+ *
+ * O poll_in do driver da KL25Z so olha o flag RDRF e nunca limpa o overrun;
+ * quem limpa e o err_check, que a aplicacao nao chama. E no UART0 o OR, uma
+ * vez aceso, impede o RDRF de subir de novo: a serial fica surda para sempre,
+ * embora continue imprimindo. O sintoma e o primeiro comando funcionar e
+ * nenhuma tecla depois dele aparecer, que foi o que aconteceu na bancada em
+ * 22/09. Limpar e ler S1 com o OR aceso e em seguida ler D - esse byte ja
+ * estava perdido de qualquer jeito. */
+static int tecla_crua(void)
 {
 	unsigned char c;
 
+	if (UART0->S1 & UART0_S1_OR_MASK) {
+		(void)UART0->D;
+	}
+
 	return (uart_poll_in(console, &c) == 0) ? (int)c : -1;
+}
+
+/* Uma tecla de folego. O laco do controle passa ate 400 ms esperando a
+ * resposta do radio, e sem isso a tecla apertada nessa janela era perdida - ou
+ * pior, estourava o overrun acima. Vale para o S, que e a parada de emergencia
+ * e e justamente o que se aperta com o carrinho ja andando. */
+static int pendente = -1;
+
+static int tecla(void)
+{
+	int c = pendente;
+
+	if (c >= 0) {
+		pendente = -1;
+		return c;
+	}
+	return tecla_crua();
 }
 
 static int letra_para_cmd(int c)
@@ -102,6 +133,14 @@ static void mostra(const enl_msg_t *m)
 		printk(" | ultima manobra terminou com codigo %u", m->motivo);
 	}
 	printk("\n");
+}
+
+/* Drena o registrador da serial enquanto o laco espera o radio. */
+static void espia_tecla(void)
+{
+	if (pendente < 0) {
+		pendente = tecla_crua();
+	}
 }
 
 int main(void)
@@ -139,6 +178,7 @@ int main(void)
 						veio = 1;
 						break;
 					}
+					espia_tecla();
 					k_msleep(2);
 				}
 				if (!veio) {
