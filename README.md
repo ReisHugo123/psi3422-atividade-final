@@ -1,8 +1,13 @@
 # PSI3422 — Entrega final: carrinho comandado por rádio
 
 Carrinho 2WD com **FRDM-KL25Z**, ponte H **L298N**, dois **encoders**, ultrassom
-**HC-SR04** e rádio **nRF24L01+**, montado sobre a placa de interconexão da
-atividade 3. Zephyr RTOS + PlatformIO.
+**HC-SR04** e rádio **nRF24L01+**. Zephyr RTOS + PlatformIO.
+
+⚠ **A placa da atividade 3 não ficou funcional.** Foram duas montagens, as duas
+com curto de solda — na segunda, a ilha do PTE3 (J9-11) ficou em continuidade ao
+mesmo tempo com GND e com 3,3 V, curto-circuitando a alimentação. O carrinho foi
+**apresentado com fiação por jumper**, nos mesmos pinos que a placa rotearia, então
+o firmware é idêntico nos dois casos.
 
 O comportamento pedido no enunciado:
 
@@ -16,7 +21,7 @@ O comportamento pedido no enunciado:
 ## Esta entrega é integração, não invenção
 
 Cada peça já tinha sido construída e provada numa atividade anterior. Aqui elas
-passam a conviver na mesma placa e no mesmo firmware.
+passam a conviver no mesmo carrinho e no mesmo firmware.
 
 | Peça | Vem de | Estado |
 |---|---|---|
@@ -25,7 +30,7 @@ passam a conviver na mesma placa e no mesmo firmware.
 | `lib/spi`, `lib/nrf24` | atividade 2, wireless | provado na bancada, passo 5 |
 | `lib/encoder`, `lib/odometria` | atividade 4, encoders | provado |
 | `lib/enlace` | **novo**, 70 linhas | o protocolo de comando |
-| placa | atividade 3 | interliga tudo |
+| placa | atividade 3 | **não funcional**, substituída por jumper |
 
 ## Dois programas, um projeto
 
@@ -57,12 +62,13 @@ manobra que terminou mal, se houve alguma.
 
 ## Ligações
 
-Todas já estão em cobre na placa da atividade 3. A tabela serve para conferir.
+Feitas por jumper, direto nas barras da FRDM. São os mesmos pinos que a placa da
+atividade 3 rotearia.
 
 | Módulo | Sinais |
 |---|---|
 | L298N | ENA=PTD2, IN1=PTD0, IN2=PTD5, ENB=PTD3, **IN3=PTE0, IN4=PTE1** |
-| Encoders | ENC_ESQ=PTD6 (J2-17), ENC_DIR=PTD7 (J2-19) |
+| Encoders | ENC_ESQ=PTD7 (J2-19), ENC_DIR=PTD6 (J2-17) |
 | HC-SR04 | TRIG=PTB0 (A0), ECHO=PTB1 (A1) |
 | nRF24L01+ | SCK=PTC5, MOSI=PTC6, MISO=PTC7, **CSN=PTA4, CE=PTD4**, IRQ=PTA12 |
 
@@ -92,12 +98,13 @@ pio run -t upload --upload-port E:
 
 ## Como o carrinho é organizado por dentro
 
-Duas threads, e a prioridade entre elas é o que faz o STOP funcionar.
+Três threads, e a prioridade entre elas é o que faz o STOP funcionar. Prioridade
+menor é mais urgente.
 
 ```
-thread RADIO (prio 5)              thread NAVEGACAO (prio 6)
-escuta o radio e o terminal        roda o labirinto passo a passo
-aplica o comando e responde        soma a distancia de cada avanco
+thread SONAR (prio 4)      thread RADIO (prio 5)          thread NAVEGACAO (prio 6)
+mede a distancia sempre    escuta o radio e o terminal    roda o labirinto
+corta o avanco na parede   aplica o comando e responde    soma a distancia andada
 ```
 
 O STOP não pode esperar a manobra atual acabar, senão o carrinho segue andando
@@ -112,12 +119,18 @@ bandeira que a malha consulta, e a manobra morre no passo seguinte devolvendo
 O carrinho tem **um** sensor, apontando para frente. Com isso a regra possível é:
 
 ```
-livre        -> anda um passo de 200 mm
-bloqueado    -> recua 80 mm
+livre        -> avanca continuamente (alvo de 2000 mm, cortado pelo sonar)
+bloqueado    -> recua 60 mm
                 tenta a direita  (gira +90)   livre? segue
                 tenta a esquerda (gira -180)  livre? segue
                 beco sem saida   (gira -90)   volta pelo caminho
 ```
+
+O avanco **nao** e em passos fixos. O alvo de 2000 mm e longo de proposito: quem
+encerra o trecho e a thread do sonar, que mede continuamente e chama
+`odo_aborta()` ao ver parede a menos de 180 mm. Em passos fixos o carrinho ficava
+cego entre duas leituras — com passo de 120 mm e limiar de 150 mm dava para comecar
+um passo a 151 mm da parede e termina-lo a 31 mm dela.
 
 Girar 90 graus de verdade é o que a atividade 4 entregou. Sem encoder esse giro
 seria por tempo, e mudaria com o piso, o peso e a carga da bateria, o que num
